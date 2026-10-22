@@ -18,12 +18,48 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ServiceBusNamespaceManagerStartupTest {
+
+    @Test
+    void externalBrokerRejectsAnotherNamespaceWithoutTouchingDocker() {
+        EmulatorConfig config = mock(EmulatorConfig.class, RETURNS_DEEP_STUBS);
+        EmulatorConfig.ServiceBusConfig settings = config.services().serviceBus();
+        when(settings.externalBrokerHost()).thenReturn(Optional.of("artemis"));
+        when(settings.externalBrokerNamespace()).thenReturn("owned");
+        ContainerLifecycleManager lifecycle = mock(ContainerLifecycleManager.class);
+        ContainerBuilder builder = mock(ContainerBuilder.class);
+        ServiceBusNamespaceManager manager = new ServiceBusNamespaceManager(config, builder, lifecycle,
+                mock(ServiceBusConfigGenerator.class), mock(ArtemisTlsGenerator.class));
+
+        assertEquals(0, manager.reapOrphanedContainers());
+        assertThrows(IllegalArgumentException.class, () -> manager.startNamespace("other", 5672, 5671));
+        manager.shutdownAll();
+        verifyNoInteractions(lifecycle, builder);
+        assertTrue(manager.listNamespaces().isEmpty());
+    }
+
+    @Test
+    void externalBrokerRequiresItsCertificateWithoutTouchingDocker() {
+        EmulatorConfig config = mock(EmulatorConfig.class, RETURNS_DEEP_STUBS);
+        EmulatorConfig.ServiceBusConfig settings = config.services().serviceBus();
+        when(settings.externalBrokerHost()).thenReturn(Optional.of("artemis"));
+        when(settings.externalBrokerNamespace()).thenReturn("owned");
+        ContainerLifecycleManager lifecycle = mock(ContainerLifecycleManager.class);
+        ContainerBuilder builder = mock(ContainerBuilder.class);
+        ServiceBusNamespaceManager manager = new ServiceBusNamespaceManager(config, builder, lifecycle,
+                mock(ServiceBusConfigGenerator.class), mock(ArtemisTlsGenerator.class));
+
+        assertThrows(IllegalArgumentException.class, () -> manager.startNamespace("owned", 5672, 5671));
+        verifyNoInteractions(lifecycle, builder);
+        assertTrue(manager.listNamespaces().isEmpty());
+    }
 
     @Test
     void failedDockerStartRemovesContainerWithoutReportingPortsReleased() throws Exception {
@@ -76,6 +112,9 @@ class ServiceBusNamespaceManagerStartupTest {
     @Test
     void cleanedPreStartFailureReportsPortsReleased() throws Exception {
         EmulatorConfig config = mock(EmulatorConfig.class);
+        EmulatorConfig.ServicesConfig services = mock(EmulatorConfig.ServicesConfig.class);
+        when(config.services()).thenReturn(services);
+        when(services.serviceBus()).thenReturn(mock(EmulatorConfig.ServiceBusConfig.class));
         ContainerLifecycleManager lifecycleManager = mock(ContainerLifecycleManager.class);
         ArtemisTlsGenerator tlsGenerator = mock(ArtemisTlsGenerator.class);
         String containerName = "floci-az-servicebus-failed";

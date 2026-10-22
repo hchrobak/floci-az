@@ -185,9 +185,7 @@ class ServiceBusCompatibilityTest {
 
         send(queue, payload);
 
-        // Exhaust the entity's two delivery attempts by abandoning both. Only the relative
-        // delivery count is asserted: the emulator's AMQP delivery-count header is 1-based
-        // where Azure's is 0-based, and this SDK reads the header verbatim.
+        // Exhaust the entity's two attempts. The Java SDK exposes the zero-based AMQP count.
         long previousCount = -1;
         for (int attempt = 1; attempt <= 2; attempt++) {
             try (ServiceBusReceiverClient receiver = peekLockReceiver(queue)) {
@@ -216,6 +214,8 @@ class ServiceBusCompatibilityTest {
             ServiceBusReceivedMessage dlqMsg = dlqReceiver.receiveMessages(1, RECV_TIMEOUT)
                     .stream().findFirst().orElse(null);
             assertNotNull(dlqMsg, "Message should be dead-lettered after exceeding MaxDeliveryCount");
+            assertEquals(2, dlqMsg.getDeliveryCount());
+            assertEquals("MaxDeliveryCountExceeded", dlqMsg.getDeadLetterReason());
             assertEquals(payload, dlqMsg.getBody().toString());
             dlqReceiver.complete(dlqMsg);
         }

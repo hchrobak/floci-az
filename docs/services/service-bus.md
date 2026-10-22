@@ -25,6 +25,21 @@ reports `1` and the receive after one abandon reports `2`. The Java and JavaScri
 the raw AMQP count, reporting `0` and `1` for those same receives. Peek and session-lock renewal
 do not count as additional delivery attempts.
 
+Automatic dead-lettering retains the exhausted delivery count and sets
+`DeadLetterReason` to `MaxDeliveryCountExceeded`. Explicit dead-letter reasons are preserved.
+
+## External broker (prototype)
+
+An orchestrator can own the broker instead of giving floci-az access to Docker.
+Set `external-broker-host`, `external-broker-namespace`, and `external-broker-cert-path`
+under `floci-az.services.service-bus`, with `mocked: false`. The AMQP ports identify the
+external broker's listeners; `external-broker-management-port` defaults to `8161`.
+
+The broker must use the configuration, TLS keystore and patched Artemis libraries from
+the same floci-az build. A stock Artemis image is not sufficient. Only the configured
+namespace is accepted. Stopping floci-az disconnects its CBS responder but never stops
+or deletes the external broker. Preparing a standalone broker image is not automated yet.
+
 ## Management plane
 
 Entity CRUD is served over HTTP at `/{account}-servicebus/`:

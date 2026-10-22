@@ -266,6 +266,10 @@ floci-az:
       amqp-port: 5673
       amqp-tls-port: 5674
       artemis-image: "apache/activemq-artemis:2.44.0"
+      # external-broker-host: artemis  # prepared broker, managed by the caller, not Docker
+      external-broker-namespace: default
+      external-broker-management-port: 8161
+      # external-broker-cert-path: /etc/floci/broker.pem
       max-delivery-count: 10
       lock-duration-seconds: 60
     monitor:

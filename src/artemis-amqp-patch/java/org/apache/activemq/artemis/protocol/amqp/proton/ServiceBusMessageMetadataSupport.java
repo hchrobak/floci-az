@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.activemq.artemis.api.core.Message;
 import org.apache.activemq.artemis.api.core.SimpleString;
 import org.apache.activemq.artemis.core.server.MessageReference;
 import org.apache.activemq.artemis.protocol.amqp.broker.AMQPMessage;
@@ -20,6 +21,11 @@ public final class ServiceBusMessageMetadataSupport {
    private static final SimpleString SESSION_PREFIX = SimpleString.of("floci-az:servicebus-session:");
 
    private ServiceBusMessageMetadataSupport() {
+   }
+
+   public static int deadLetterDeliveryCount(Message message) {
+      Object count = message.getBrokerProperty(SimpleString.of("x-opt-floci-dead-letter-delivery-count"));
+      return count instanceof Number number ? number.intValue() : 0;
    }
 
    public static boolean isServiceBus(MessageReference reference) {
@@ -59,7 +65,8 @@ public final class ServiceBusMessageMetadataSupport {
          return original;
       }
       Header header = original == null ? new Header() : new Header(original);
-      header.setDeliveryCount(UnsignedInteger.valueOf(Math.max(0, reference.getDeliveryCount() - 1)));
+      header.setDeliveryCount(UnsignedInteger.valueOf(deadLetterDeliveryCount(reference.getMessage())
+         + Math.max(0, reference.getDeliveryCount() - 1)));
       return header;
    }
 

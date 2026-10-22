@@ -114,3 +114,54 @@ def test_receive_from_subscription_dead_letter_queue():
             message = receive_one(dead_letters)
             assert str(message) == body
             dead_letters.complete_message(message)
+
+
+@pytest.mark.parametrize("sessions", [False, True])
+def test_exhausted_subscription_keeps_dead_letter_metadata(sessions):
+    topic = unique("py-exhausted")
+    create_entity(f"topics/{topic}")
+    properties = "<MaxDeliveryCount>10</MaxDeliveryCount>"
+    if sessions:
+        properties += "<RequiresSession>true</RequiresSession>"
+    xml = (
+        "<entry xmlns='http://www.w3.org/2005/Atom'><content type='application/xml'>"
+        "<SubscriptionDescription xmlns='http://schemas.microsoft.com/netservices/2010/10/servicebus/connect'>"
+        + properties + "</SubscriptionDescription></content></entry>"
+    )
+    response = requests.put(
+        f"{BASE}/{ACCOUNT}-servicebus/{NAMESPACE}/topics/{topic}/subscriptions/worker",
+        data=xml, headers={"Content-Type": "application/atom+xml"}, timeout=30,
+    )
+    response.raise_for_status()
+    session = {"session_id": "session-one"} if sessions else {}
+
+    with ServiceBusClient.from_connection_string(CONNECTION_STRING) as client:
+        with client.get_topic_sender(topic) as sender:
+            sender.send_messages(ServiceBusMessage("poison", **session))
+        with client.get_subscription_receiver(
+            topic, "worker", max_wait_time=WAIT_SECONDS, prefetch_count=0, **session
+        ) as receiver:
+            for attempt in range(10):
+                message = receive_one(receiver)
+                assert message.delivery_count == attempt
+                receiver.abandon_message(message)
+        with client.get_subscription_receiver(
+            topic, "worker", sub_queue=ServiceBusSubQueue.DEAD_LETTER, max_wait_time=WAIT_SECONDS
+        ) as dead_letters:
+            peeked = dead_letters.peek_messages(max_message_count=1, timeout=WAIT_SECONDS)
+            assert len(peeked) == 1
+            assert peeked[0].delivery_count == 10
+            assert peeked[0].dead_letter_reason == "MaxDeliveryCountExceeded"
+            assert str(peeked[0]) == "poison"
+            message = receive_one(dead_letters)
+            assert message.delivery_count == 10
+            assert message.dead_letter_reason == "MaxDeliveryCountExceeded"
+            dead_letters.complete_message(message)
+        with client.get_topic_sender(topic) as sender:
+            sender.send_messages(ServiceBusMessage("next", **session))
+        with client.get_subscription_receiver(
+            topic, "worker", max_wait_time=WAIT_SECONDS, **session
+        ) as receiver:
+            message = receive_one(receiver)
+            assert str(message) == "next"
+            receiver.complete_message(message)

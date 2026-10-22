@@ -29,6 +29,19 @@ class ServiceBusMessageMetadataSupportTest {
     private static final Symbol SEQUENCE = Symbol.valueOf("x-opt-sequence-number");
     private static final Symbol ENQUEUED = Symbol.valueOf("x-opt-enqueued-time");
 
+    @Test
+    void streamedDeadLetterDeliveryStartsFromThePreservedCount() throws Exception {
+        try (Fixture fixture = new Fixture("peeklock")) {
+            when(fixture.reference.getMessage()).thenReturn(fixture.message);
+            when(fixture.message.getBrokerProperty(SimpleString.of("x-opt-floci-dead-letter-delivery-count")))
+                    .thenReturn(10);
+            when(fixture.reference.getDeliveryCount()).thenReturn(1);
+            assertEquals(UnsignedInteger.valueOf(10), fixture.header(null).getDeliveryCount());
+            when(fixture.reference.getDeliveryCount()).thenReturn(2);
+            assertEquals(UnsignedInteger.valueOf(11), fixture.header(null).getDeliveryCount());
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"peeklock", "session"})
     void streamedDeliveryCountDoesNotRequireAnIndividualMessageLock(String kind) throws Exception {

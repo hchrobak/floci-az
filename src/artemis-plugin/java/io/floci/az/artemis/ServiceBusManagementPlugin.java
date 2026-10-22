@@ -244,7 +244,9 @@ public final class ServiceBusManagementPlugin implements ActiveMQServerPlugin {
     private static Header peekHeader(AMQPMessage source, MessageReference reference) {
         Header sourceHeader = source.getHeader();
         Header header = sourceHeader == null ? new Header() : new Header(sourceHeader);
-        header.setDeliveryCount(UnsignedInteger.valueOf(reference.getDeliveryCount()));
+        Object originalCount = source.getBrokerProperty(SimpleString.of("x-opt-floci-dead-letter-delivery-count"));
+        int baseCount = originalCount instanceof Number number ? number.intValue() : 0;
+        header.setDeliveryCount(UnsignedInteger.valueOf(baseCount + reference.getDeliveryCount()));
         return header;
     }
 

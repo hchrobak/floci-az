@@ -20,6 +20,9 @@ class ServiceBusOrphanCleanupTest {
     @Test
     void scopesCleanupToConfiguredResourceNamespaceAndServicePrefix() {
         EmulatorConfig config = mock(EmulatorConfig.class);
+        EmulatorConfig.ServicesConfig services = mock(EmulatorConfig.ServicesConfig.class);
+        when(config.services()).thenReturn(services);
+        when(services.serviceBus()).thenReturn(mock(EmulatorConfig.ServiceBusConfig.class));
         EmulatorConfig.DockerConfig docker = mock(EmulatorConfig.DockerConfig.class);
         when(config.docker()).thenReturn(docker);
         when(docker.resourceNamespace()).thenReturn(Optional.of("run-one"));

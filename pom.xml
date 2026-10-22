@@ -231,6 +231,35 @@
                         </configuration>
                     </execution>
                     <execution>
+                        <id>unpack-servicebus-artemis-server</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>unpack</goal></goals>
+                        <configuration>
+                            <artifactItems><artifactItem>
+                                <groupId>org.apache.activemq</groupId>
+                                <artifactId>artemis-server</artifactId>
+                                <version>${artemis.version}</version>
+                                <outputDirectory>${project.build.directory}/artemis-server-classes</outputDirectory>
+                            </artifactItem></artifactItems>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>unpack-servicebus-artemis-server-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>unpack</goal></goals>
+                        <configuration>
+                            <overWriteReleases>true</overWriteReleases>
+                            <artifactItems><artifactItem>
+                                <groupId>org.apache.activemq</groupId>
+                                <artifactId>artemis-server</artifactId>
+                                <version>${artemis.version}</version>
+                                <classifier>sources</classifier>
+                                <includes>org/apache/activemq/artemis/core/server/impl/QueueImpl.java</includes>
+                                <outputDirectory>${project.build.directory}/artemis-server-patch-sources</outputDirectory>
+                            </artifactItem></artifactItems>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>unpack-servicebus-artemis-amqp-sources</id>
                         <phase>generate-sources</phase>
                         <goals>
@@ -272,6 +301,16 @@
                         </goals>
                         <configuration>
                             <target>
+                                <replace
+                                    file="${project.build.directory}/artemis-server-patch-sources/org/apache/activemq/artemis/core/server/impl/QueueImpl.java"
+                                    token="Message copyMessage = makeCopy(ref, reason == AckReason.EXPIRED, address);"
+                                    value="Message copyMessage = makeCopy(ref, reason == AckReason.EXPIRED, address); org.apache.activemq.artemis.core.server.impl.ServiceBusDeadLetterMetadata.apply(ref, copyMessage, reason, cachedAddressSettings.getMaxDeliveryAttempts());"
+                                    failOnNoReplacements="true" />
+                                <replace
+                                    file="${project.build.directory}/artemis-amqp-patch-sources/org/apache/activemq/artemis/protocol/amqp/broker/AMQPMessage.java"
+                                    token="public ReadableBuffer getSendBuffer(int deliveryCount, MessageReference reference) {"
+                                    value="public ReadableBuffer getSendBuffer(int deliveryCount, MessageReference reference) { deliveryCount += org.apache.activemq.artemis.protocol.amqp.proton.ServiceBusMessageMetadataSupport.deadLetterDeliveryCount(this);"
+                                    failOnNoReplacements="true" />
                                 <!-- Azure SDKs require an explicit header on the first delivery.
                                      Keep Artemis's zero-based conversion (deliveryCount - 1). -->
                                 <replace
@@ -483,6 +522,9 @@
                                     destfile="${project.build.directory}/classes/artemis/proton-j-${proton-j.version}-floci-az-proton-patch.jar"
                                     basedir="${project.build.directory}/artemis-proton-classes" />
                                 <jar
+                                    destfile="${project.build.directory}/classes/artemis/artemis-server-${artemis.version}-floci-az-server-patch.jar"
+                                    basedir="${project.build.directory}/artemis-server-classes" />
+                                <jar
                                     destfile="${project.build.directory}/classes/artemis/artemis-amqp-protocol-${artemis.version}-floci-az-artemis-amqp-patch.jar"
                                     basedir="${project.build.directory}/artemis-amqp-classes" />
                             </target>
@@ -523,6 +565,19 @@
                                 <compileSourceRoot>${project.basedir}/src/artemis-patch/java</compileSourceRoot>
                             </compileSourceRoots>
                             <outputDirectory>${project.build.directory}/artemis-proton-classes</outputDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>compile-servicebus-artemis-server-patch</id>
+                        <phase>compile</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <release>21</release>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/artemis-server-patch/java</compileSourceRoot>
+                                <compileSourceRoot>${project.build.directory}/artemis-server-patch-sources</compileSourceRoot>
+                            </compileSourceRoots>
+                            <outputDirectory>${project.build.directory}/artemis-server-classes</outputDirectory>
                         </configuration>
                     </execution>
                     <execution>

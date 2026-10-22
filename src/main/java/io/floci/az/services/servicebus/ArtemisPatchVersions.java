@@ -25,6 +25,10 @@ public final class ArtemisPatchVersions {
     /** Embedded resource holding the patched artemis-amqp-protocol jar. */
     public static final String ARTEMIS_AMQP_PATCH_RESOURCE =
             "/artemis/artemis-amqp-protocol-" + ARTEMIS_VERSION + "-floci-az-artemis-amqp-patch.jar";
+    public static final String ARTEMIS_SERVER_PATCH_RESOURCE =
+            "/artemis/artemis-server-" + ARTEMIS_VERSION + "-floci-az-server-patch.jar";
+    public static final String ARTEMIS_SERVER_CONTAINER_PATH =
+            "/opt/activemq-artemis/lib/artemis-server-" + ARTEMIS_VERSION + ".jar";
     /** Where the stock proton-j jar lives inside the {@code apache/activemq-artemis} image. */
     public static final String PROTON_J_CONTAINER_PATH =
             "/opt/activemq-artemis/lib/proton-j-" + PROTON_J_VERSION + ".jar";

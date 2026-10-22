@@ -26,6 +26,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -163,6 +165,9 @@ public class ServiceBusNamespaceManager implements ServiceHealth {
         if (existing != null) {
             return existing;
         }
+        if (config.services().serviceBus().externalBrokerHost().isPresent()) {
+            return connectExternalBroker(namespaceName);
+        }
         String containerName = containerName(namespaceName);
 
         LOG.infov("Starting Artemis broker for Service Bus namespace ''{0}'' (plain:{1}, TLS:{2})",
@@ -219,6 +224,9 @@ public class ServiceBusNamespaceManager implements ServiceHealth {
                     PROTON_J_PATH);
             lifecycleManager.copyBytesToContainer(containerId, loadResource(ARTEMIS_AMQP_PATCH_RESOURCE),
                     ARTEMIS_AMQP_PATH);
+            lifecycleManager.copyBytesToContainer(containerId,
+                    loadResource(ArtemisPatchVersions.ARTEMIS_SERVER_PATCH_RESOURCE),
+                    ArtemisPatchVersions.ARTEMIS_SERVER_CONTAINER_PATH);
 
             startAttempted = true;
             ContainerLifecycleManager.ContainerInfo info = lifecycleManager.startCreated(containerId, spec);
@@ -302,9 +310,43 @@ public class ServiceBusNamespaceManager implements ServiceHealth {
     }
 
     int reapOrphanedContainers() {
+        if (config.services().serviceBus().externalBrokerHost().isPresent()) {
+            return 0;
+        }
         return lifecycleManager.removeOrphanedContainers(
                 containerName(""), ContainerStorageHelper.defaultLabels(config),
                 OWNER_CONTAINER_LABEL);
+    }
+
+    private NamespaceState connectExternalBroker(String namespaceName) {
+        EmulatorConfig.ServiceBusConfig settings = config.services().serviceBus();
+        if (!namespaceName.equals(settings.externalBrokerNamespace())) {
+            throw new IllegalArgumentException("External Service Bus broker belongs to namespace '"
+                    + settings.externalBrokerNamespace() + "', not '" + namespaceName + "'");
+        }
+        String host = settings.externalBrokerHost().orElseThrow();
+        String certPath = settings.externalBrokerCertPath().orElseThrow(() ->
+                new IllegalArgumentException("External Service Bus broker requires external-broker-cert-path"));
+        String certPem;
+        try {
+            certPem = Files.readString(Path.of(certPath));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Cannot read external Service Bus broker certificate", e);
+        }
+        waitForPort(new EndpointInfo(host, settings.amqpPort()), "AMQP");
+        waitForPort(new EndpointInfo(host, settings.amqpTlsPort()), "AMQPS");
+        ServiceBusCbsResponder cbs = new ServiceBusCbsResponder(host, settings.amqpPort());
+        try {
+            cbs.start();
+            NamespaceState state = new NamespaceState(null, settings.amqpPort(), settings.amqpTlsPort(),
+                    certPem, host, settings.externalBrokerManagementPort(), false);
+            cbsResponders.put(namespaceName, cbs);
+            register(namespaceName, state);
+            return state;
+        } catch (RuntimeException e) {
+            cbs.stop();
+            throw e;
+        }
     }
 
     Map<String, String> serviceContainerLabels(String namespaceName) {

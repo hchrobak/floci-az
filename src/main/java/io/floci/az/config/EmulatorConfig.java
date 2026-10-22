@@ -705,6 +705,18 @@ public interface EmulatorConfig {
         @WithDefault("apache/activemq-artemis:2.44.0")
         String artemisImage();
 
+        /** Connect to an already prepared broker instead of creating a Docker sidecar. */
+        Optional<String> externalBrokerHost();
+
+        @WithDefault("default")
+        String externalBrokerNamespace();
+
+        @WithDefault("8161")
+        int externalBrokerManagementPort();
+
+        /** PEM certificate matching the external broker's AMQPS keystore. */
+        Optional<String> externalBrokerCertPath();
+
         @WithDefault("10")
         int maxDeliveryCount();
 
